@@ -16,13 +16,26 @@ import (
 var logger = gologger.NewFromEnv()
 
 type Server struct {
-	Ip        string `json:"server_ip"`
-	Number    int    `json:"server_number"`
-	Name      string `json:"server_name"`
-	Product   string `json:"product"`
-	Dc        string `json:"dc"`
-	Status    string `json:"status"`
-	PaidUntil string `json:"paid_until"`
+	ServerIp     string   `json:"server_ip"`
+	ServerNumber int      `json:"server_number"`
+	ServerName   string   `json:"server_name"`
+	Product      string   `json:"product"`
+	Dc           string   `json:"dc"`
+	Traffic      string   `json:"traffic"`
+	Flatrate     bool     `json:"flatrate"`
+	Status       string   `json:"status"`
+	Throttled    bool     `json:"throttled"`
+	Cancelled    bool     `json:"cancelled"`
+	PaidUntil    string   `json:"paid_until"`
+	Ips          []string `json:"ip"`
+	//Subnet       string   `json:"subnet"`
+	Reset        bool     `json:"reset"`
+	Rescue       bool     `json:"rescue"`
+	Vnc          bool     `json:"vnc"`
+	Windows      bool     `json:"windows"`
+	Plesk        bool     `json:"plesk"`
+	Cpanel       bool     `json:"cpanel"`
+	Wol          bool     `json:"wol"`
 }
 
 type Account struct {
@@ -121,11 +134,7 @@ func (account *Account) Servers() (servers []*Server, e error) {
 }
 
 func (server *Server) String() string {
-	return fmt.Sprintf("%d: %s (%s)", server.Number, server.Name, server.Ip)
-}
-
-type ServerResponse struct {
-	Servers []*Server `json:"server"`
+	return fmt.Sprintf("%d: %s (%s)", server.ServerNumber, server.ServerName, server.ServerIp)
 }
 
 var router = gocli.NewRouter(nil)
@@ -146,8 +155,9 @@ func listServers(args *gocli.Args) error {
 		return e
 	}
 	table := gocli.NewTable()
+	table.Add("Number", "Name", "Product", "DC", "Ip", "Status")
 	for _, server := range servers {
-		table.Add(server.Number, server.Name, server.Product, server.Ip, server.Status)
+		table.Add(server.ServerNumber, server.ServerName, server.Product, server.Dc, server.ServerIp, server.Status)
 	}
 	fmt.Println(table)
 	return nil
@@ -162,7 +172,63 @@ func renameServer(args *gocli.Args) error {
 	return account.RenameServer(ip, name)
 }
 
+func loadUrl(url string) (rsp *http.Response, e error) {
+	req, e := http.NewRequest("GET", url, nil)
+	if e != nil {
+		return nil, e
+	}
+	return loadRequest(req)
+}
+
+type ServerResponse struct {
+	Server *Server `json:"server"`
+}
+
+func (account *Account) LoadServer(ip string) (server *Server, e error) {
+	rsp, e := loadUrl(account.Url() + "/server/" + ip)
+	if e != nil {
+		return nil, e
+	}
+	defer rsp.Body.Close()
+	b, e := ioutil.ReadAll(rsp.Body)
+	if e != nil {
+		return nil, e
+	}
+	serverResponse := &ServerResponse{}
+	e = json.Unmarshal(b, serverResponse)
+	if e != nil {
+		return nil, e
+	}
+	return serverResponse.Server, e
+}
+
+func describeServer(args *gocli.Args) error {
+	if len(args.Args) != 1 {
+		return fmt.Errorf("<ip>")
+	}
+	ip := args.Args[0]
+	server, e := account.LoadServer(ip)
+	if e != nil {
+		return e
+	}
+	table := gocli.NewTable()
+	table.Add("IP", server.ServerIp)
+	table.Add("Number", server.ServerNumber)
+	table.Add("Name", server.ServerName)
+	table.Add("Product", server.Product)
+	table.Add("DataCenter", server.Dc)
+	table.Add("Status", server.Status)
+	table.Add("Reset", server.Reset)
+	table.Add("Rescue", server.Rescue)
+	table.Add("VNC", server.Vnc)
+	fmt.Println(table)
+	return nil
+}
+
 func main() {
+	router.Register("servers/describe", &gocli.Action{
+		Handler: describeServer, Description: "describe server",
+	})
 	router.Register("servers/list", &gocli.Action{
 		Handler: listServers, Description: "list servers",
 	})
