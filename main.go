@@ -28,7 +28,6 @@ type Server struct {
 	Cancelled    bool     `json:"cancelled"`
 	PaidUntil    string   `json:"paid_until"`
 	Ips          []string `json:"ip"`
-	//Subnet       string   `json:"subnet"`
 	Reset        bool     `json:"reset"`
 	Rescue       bool     `json:"rescue"`
 	Vnc          bool     `json:"vnc"`
